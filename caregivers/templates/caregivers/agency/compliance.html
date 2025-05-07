@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block title %}Agency Compliance{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Compliance Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">HIPAA Compliance</h6>
+                    <h2 class="mb-0">{{ compliance_status.hipaa_compliance|floatformat:1 }}%</h2>
+                    <small>Last updated: {{ agency.hipaa_compliance_date|date:"M d, Y" }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">State License Compliance</h6>
+                    <h2 class="mb-0">{{ compliance_status.state_license_compliance|floatformat:1 }}%</h2>
+                    <small>{{ agency.agencystatelicense_set.count }} active licenses</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Caregiver Compliance</h6>
+                    <h2 class="mb-0">{{ compliance_status.caregiver_compliance|floatformat:1 }}%</h2>
+                    <small>{{ total_caregivers }} total caregivers</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Expiring Documents</h6>
+                    <h2 class="mb-0">{{ expiring_documents_count }}</h2>
+                    <small>Next 30 days</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- State License Compliance -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">State License Compliance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>State</th>
+                                    <th>License</th>
+                                    <th>Status</th>
+                                    <th>Expires</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for license in agency.agencystatelicense_set.all %}
+                                <tr>
+                                    <td>{{ license.state.name }}</td>
+                                    <td>{{ license.license_number }}</td>
+                                    <td>
+                                        {% if license.verification_status == 'verified' %}
+                                            <span class="badge bg-success">Verified</span>
+                                        {% elif license.verification_status == 'pending' %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Unverified</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ license.expiry_date|date:"M d, Y" }}
+                                        {% if license.is_expiring_soon %}
+                                            <span class="badge bg-warning">Expiring Soon</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No state licenses found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Caregiver Compliance -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Caregiver Compliance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Fully Compliant</td>
+                                    <td>{{ caregiver_stats.compliant }}</td>
+                                    <td>{{ caregiver_stats.compliant_percentage|floatformat:1 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Partially Compliant</td>
+                                    <td>{{ caregiver_stats.partial }}</td>
+                                    <td>{{ caregiver_stats.partial_percentage|floatformat:1 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Non-Compliant</td>
+                                    <td>{{ caregiver_stats.non_compliant }}</td>
+                                    <td>{{ caregiver_stats.non_compliant_percentage|floatformat:1 }}%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Documents -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Expiring Documents (Next 30 Days)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Name</th>
+                                    <th>Document</th>
+                                    <th>Expires</th>
+                                    <th>Days Left</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in expiring_documents %}
+                                <tr>
+                                    <td>{{ doc.type }}</td>
+                                    <td>{{ doc.name }}</td>
+                                    <td>{{ doc.document_name }}</td>
+                                    <td>{{ doc.expiry_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        <span class="badge {% if doc.days_left <= 7 %}bg-danger{% elif doc.days_left <= 14 %}bg-warning{% else %}bg-info{% endif %}">
+                                            {{ doc.days_left }} days
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ doc.renewal_url }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-sync"></i> Renew
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No documents expiring in the next 30 days</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compliance Reports -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Compliance Reports</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">HIPAA Compliance Report</h6>
+                                    <p class="card-text">Download detailed HIPAA compliance report for your agency.</p>
+                                    <a href="{% url 'agency_hipaa_report' %}" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">State License Report</h6>
+                                    <p class="card-text">Download state license compliance report.</p>
+                                    <a href="{% url 'agency_license_report' %}" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">Caregiver Compliance Report</h6>
+                                    <p class="card-text">Download caregiver compliance status report.</p>
+                                    <a href="{% url 'agency_caregiver_report' %}" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+        
+        // Initialize data tables if needed
+        if ($.fn.DataTable) {
+            $('.table').DataTable({
+                responsive: true,
+                pageLength: 10,
+                order: [[3, 'asc']] // Sort by expiry date by default
+            });
+        }
+    });
+</script>
+{% endblock %} 

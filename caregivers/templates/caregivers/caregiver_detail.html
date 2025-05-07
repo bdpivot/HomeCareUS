@@ -1,0 +1,179 @@
+{% extends 'caregivers/base.html' %}
+
+{% block title %}{{ caregiver.first_name }} {{ caregiver.last_name }} - HomeCare US{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">{{ caregiver.first_name }} {{ caregiver.last_name }}</h1>
+    <div class="btn-group">
+        <a href="{% url 'caregiver_edit' caregiver.pk %}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> Edit
+        </a>
+        <a href="{% url 'caregiver_delete' caregiver.pk %}" class="btn btn-danger">
+            <i class="fas fa-trash"></i> Delete
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Basic Information -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Basic Information</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge {% if caregiver.status == 'active' %}bg-success{% elif caregiver.status == 'pending' %}bg-warning{% else %}bg-danger{% endif %}">
+                            {{ caregiver.get_status_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4">Agency</dt>
+                    <dd class="col-sm-8">{{ caregiver.agency|default:"-" }}</dd>
+
+                    <dt class="col-sm-4">Phone</dt>
+                    <dd class="col-sm-8">
+                        <a href="tel:{{ caregiver.phone }}" class="text-decoration-none">
+                            {{ caregiver.phone|default:"-" }}
+                        </a>
+                    </dd>
+
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">
+                        <a href="mailto:{{ caregiver.email }}" class="text-decoration-none">
+                            {{ caregiver.email|default:"-" }}
+                        </a>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certifications -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Certifications</h2>
+                <a href="{% url 'certification_add' caregiver.pk %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if caregiver.certifications.exists %}
+                    <div class="list-group list-group-flush">
+                        {% for cert in caregiver.certifications.all %}
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h3 class="h6 mb-1">{{ cert.cert_type }}</h3>
+                                        <p class="mb-0 text-muted small">
+                                            {{ cert.state }} - Expires: {{ cert.expiry_date|date:"M d, Y" }}
+                                        </p>
+                                    </div>
+                                    <span class="badge {% if cert.is_expired %}bg-danger{% else %}bg-success{% endif %}">
+                                        {{ cert.get_status_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No certifications found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- State Licenses -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">State Licenses</h2>
+                <a href="{% url 'state_license_add' caregiver.pk %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if caregiver.state_licenses.exists %}
+                    <div class="list-group list-group-flush">
+                        {% for license in caregiver.state_licenses.all %}
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h3 class="h6 mb-1">{{ license.state }}</h3>
+                                        <p class="mb-0 text-muted small">
+                                            License #: {{ license.license_number }}<br>
+                                            Expires: {{ license.expiry_date|date:"M d, Y" }}
+                                        </p>
+                                    </div>
+                                    <span class="badge {% if license.is_expired %}bg-danger{% else %}bg-success{% endif %}">
+                                        {{ license.get_status_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No state licenses found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Experience -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Experience</h2>
+                <a href="{% url 'experience_add' caregiver.pk %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if caregiver.experiences.exists %}
+                    <div class="list-group list-group-flush">
+                        {% for exp in caregiver.experiences.all %}
+                            <div class="list-group-item px-0">
+                                <h3 class="h6 mb-1">{{ exp.employer }}</h3>
+                                <p class="mb-0 text-muted small">
+                                    {{ exp.position }}<br>
+                                    {{ exp.start_date|date:"M d, Y" }} - {{ exp.end_date|date:"M d, Y"|default:"Present" }}
+                                </p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No experience records found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Improve touch targets for buttons
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(btn => {
+        btn.style.minWidth = '44px';
+        btn.style.minHeight = '44px';
+    });
+
+    // Add touch feedback to list items
+    const listItems = document.querySelectorAll('.list-group-item');
+    listItems.forEach(item => {
+        item.addEventListener('touchstart', function() {
+            this.classList.add('active');
+        });
+        item.addEventListener('touchend', function() {
+            this.classList.remove('active');
+        });
+    });
+});
+</script>
+{% endblock %}

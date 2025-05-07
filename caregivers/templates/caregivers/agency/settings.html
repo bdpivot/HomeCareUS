@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block title %}Agency Settings{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Agency Settings -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Agency Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">Agency Name</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.name.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.npi_number.id_for_label }}" class="form-label">NPI Number</label>
+                                {{ form.npi_number }}
+                                {% if form.npi_number.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.npi_number.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.tax_id.id_for_label }}" class="form-label">Tax ID</label>
+                                {{ form.tax_id }}
+                                {% if form.tax_id.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.tax_id.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.phone.id_for_label }}" class="form-label">Phone</label>
+                                {{ form.phone }}
+                                {% if form.phone.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.phone.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
+                            {{ form.address }}
+                            {% if form.address.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.address.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+                                {{ form.email }}
+                                {% if form.email.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.email.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.website.id_for_label }}" class="form-label">Website</label>
+                                {{ form.website }}
+                                {% if form.website.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.website.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <h5 class="mb-3">HIPAA Compliance</h5>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ form.hipaa_compliance_date.id_for_label }}" class="form-label">Compliance Date</label>
+                                {{ form.hipaa_compliance_date }}
+                                {% if form.hipaa_compliance_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.hipaa_compliance_date.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ form.hipaa_compliance_officer.id_for_label }}" class="form-label">Compliance Officer</label>
+                                {{ form.hipaa_compliance_officer }}
+                                {% if form.hipaa_compliance_officer.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.hipaa_compliance_officer.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ form.hipaa_compliance_contact.id_for_label }}" class="form-label">Compliance Contact</label>
+                                {{ form.hipaa_compliance_contact }}
+                                {% if form.hipaa_compliance_contact.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.hipaa_compliance_contact.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- State Licenses -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">State Licenses</h5>
+                    <a href="{% url 'agency_state_license_add' %}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus"></i> Add License
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for license in agency.agencystatelicense_set.all %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ license.state.name }}</h6>
+                                    <p class="mb-1 small">License #: {{ license.license_number }}</p>
+                                    <p class="mb-1 small">
+                                        Expires: {{ license.expiry_date|date:"M d, Y" }}
+                                        {% if license.is_expiring_soon %}
+                                            <span class="badge bg-warning">Expiring Soon</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <div class="btn-group">
+                                    <a href="{% url 'agency_state_license_edit' license.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'agency_state_license_delete' license.pk %}" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-3">
+                            <p class="text-muted mb-0">No state licenses added yet</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compliance Checklist -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Compliance Checklist</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">HIPAA Compliance</h6>
+                                    <p class="mb-0 small">Required for all healthcare providers</p>
+                                </div>
+                                {% if agency.hipaa_compliance_date %}
+                                    <span class="badge bg-success">Compliant</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Not Compliant</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">State Licenses</h6>
+                                    <p class="mb-0 small">Required for each state of operation</p>
+                                </div>
+                                {% if agency.agencystatelicense_set.exists %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Missing</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">Caregiver Compliance</h6>
+                                    <p class="mb-0 small">All caregivers must be compliant</p>
+                                </div>
+                                {% if compliance_status.caregiver_compliance > 0.8 %}
+                                    <span class="badge bg-success">Good</span>
+                                {% elif compliance_status.caregiver_compliance > 0.5 %}
+                                    <span class="badge bg-warning">Needs Attention</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Critical</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize form validation
+        $('form').on('submit', function(e) {
+            if (!this.checkValidity()) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            $(this).addClass('was-validated');
+        });
+
+        // Initialize tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,10 @@
+{% extends "caregivers/base.html" %}
+{% block content %}
+  <h1>{% if object %}Edit{% else %}Add{% endif %} Caregiver</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-success">Save</button>
+    <a href="{% url 'caregiver_list' %}" class="btn btn-link">Cancel</a>
+  </form>
+{% endblock %}
