@@ -2,13 +2,24 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login, logout
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
-from .models import Caregiver, Certification, Experience, CaregiverStateLicense, Agency, AgencyStateLicense, AuditLog
-from .forms import CaregiverForm, CertificationForm, ExperienceForm, CaregiverStateLicenseForm, AgencyForm, AgencyStateLicenseForm
+from .models import (
+    Caregiver, Certification, Experience, CaregiverStateLicense, 
+    Agency, AgencyStateLicense, AuditLog, State, CertificationType, User
+)
+from .forms import (
+    CaregiverForm, CertificationForm, ExperienceForm, 
+    AgencyForm, AgencyStateLicenseForm, CaregiverFilterForm,
+    CaregiverStateLicenseForm, LoginForm, RegisterForm, ResumeUploadForm
+)
+from .services import ResumeParserService
+import PyPDF2
+import docx
 
 class AgencyRequiredMixin(UserPassesTestMixin):
     def test_func(self):
@@ -327,41 +338,37 @@ class CaregiverListView(ListView):
         form = CaregiverFilterForm(self.request.GET)
         
         if form.is_valid():
-            # Filter by status
-            if form.cleaned_data['status']:
-                queryset = queryset.filter(status=form.cleaned_data['status'])
-            
-            # Filter by agency
-            if form.cleaned_data['agency']:
-                queryset = queryset.filter(agency=form.cleaned_data['agency'])
-            
-            # Filter by state
-            if form.cleaned_data['state']:
-                queryset = queryset.filter(states_licensed__id=form.cleaned_data['state'])
-            
-            # Filter by certification
-            if form.cleaned_data['certification']:
-                queryset = queryset.filter(certifications__cert_type_id=form.cleaned_data['certification'])
-            
-            # Filter by name
-            if form.cleaned_data['first_name']:
-                queryset = queryset.filter(name__icontains=form.cleaned_data['first_name'])
-            if form.cleaned_data['last_name']:
-                queryset = queryset.filter(name__icontains=form.cleaned_data['last_name'])
-            
-            # Filter by experience
-            if form.cleaned_data['experience_years']:
-                min_date = timezone.now().date() - timedelta(days=365 * form.cleaned_data['experience_years'])
+            search = form.cleaned_data.get('search')
+            status = form.cleaned_data.get('status')
+            state = form.cleaned_data.get('state')
+            certification = form.cleaned_data.get('certification')
+            min_years_experience = form.cleaned_data.get('min_years_experience')
+
+            if search:
                 queryset = queryset.filter(
-                    Q(experiences__start_date__lte=min_date) &
-                    (Q(experiences__end_date__gte=min_date) | Q(experiences__is_current=True))
-                ).distinct()
-        
+                    Q(name__icontains=search) |
+                    Q(specialties__icontains=search)
+                )
+
+            if status:
+                queryset = queryset.filter(status=status)
+
+            if state:
+                queryset = queryset.filter(states_licensed=state)
+
+            if certification:
+                queryset = queryset.filter(certifications__cert_type=certification)
+
+            if min_years_experience:
+                queryset = queryset.filter(
+                    experiences__start_date__lte=timezone.now().date() - timedelta(days=365 * min_years_experience)
+                )
+
         return queryset.distinct()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['filter_form'] = CaregiverFilterForm(self.request.GET)
+        context['form'] = CaregiverFilterForm(self.request.GET)
         return context
 
 class CaregiverDetailView(DetailView):
@@ -403,12 +410,6 @@ class CaregiverDeleteView(DeleteView):
         messages.success(request, 'Caregiver deleted successfully.')
         return response
 
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
-from .models import Caregiver, Certification, Experience
-from .forms import CaregiverForm, CertificationForm, ExperienceForm
-
-# Existing Caregiver views...
-
 class CertificationCreateView(CreateView):
     model = Certification
     form_class = CertificationForm
@@ -426,11 +427,11 @@ class CertificationCreateView(CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['caregiver_id'] = self.kwargs['caregiver_id']
+        kwargs['caregiver'] = Caregiver.objects.get(pk=self.kwargs['caregiver_id'])
         return kwargs
 
     def form_valid(self, form):
-        form.instance.caregiver_id = self.kwargs['caregiver_id']
+        form.instance.caregiver = Caregiver.objects.get(pk=self.kwargs['caregiver_id'])
         response = super().form_valid(form)
         messages.success(self.request, 'Certification added successfully.')
         return response
@@ -457,32 +458,236 @@ class ExperienceCreateView(CreateView):
     def get_success_url(self):
         return reverse_lazy('caregiver_detail', kwargs={'pk': self.kwargs['caregiver_id']})
 
-class CaregiverStateLicenseCreateView(CreateView):
+class ExperienceUpdateView(UpdateView):
+    model = Experience
+    form_class = ExperienceForm
+    template_name = 'caregivers/experience_form.html'
+
+    def get_success_url(self):
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+class ExperienceDeleteView(DeleteView):
+    model = Experience
+    template_name = 'caregivers/experience_confirm_delete.html'
+
+    def get_success_url(self):
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+class CaregiverStateLicenseCreateView(LoginRequiredMixin, CreateView):
     model = CaregiverStateLicense
     form_class = CaregiverStateLicenseForm
     template_name = 'caregivers/caregiver_state_license_form.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['caregiver'] = self.get_caregiver()
+        return kwargs
+
+    def get_caregiver(self):
+        return get_object_or_404(Caregiver, pk=self.kwargs['caregiver_id'])
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['caregiver'] = Caregiver.objects.get(pk=self.kwargs['caregiver_id'])
-        # Add state renewal cycles for JavaScript
-        context['state_renewal_cycles'] = {
-            state.id: state.renewal_cycle_months
-            for state in State.objects.all()
-        }
+        context['caregiver'] = self.get_caregiver()
+        context['states'] = State.objects.all().order_by('name')
         return context
+
+    def form_valid(self, form):
+        form.instance.caregiver = self.get_caregiver()
+        form.instance.created_by = self.request.user
+        form.instance.updated_by = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('caregiver_detail', kwargs={'pk': self.kwargs['caregiver_id']})
+
+class CaregiverStateLicenseUpdateView(LoginRequiredMixin, UpdateView):
+    model = CaregiverStateLicense
+    form_class = CaregiverStateLicenseForm
+    template_name = 'caregivers/caregiver_state_license_form.html'
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['caregiver_id'] = self.kwargs['caregiver_id']
+        kwargs['caregiver'] = self.object.caregiver
         return kwargs
 
-    def form_valid(self, form):
-        form.instance.caregiver_id = self.kwargs['caregiver_id']
-        response = super().form_valid(form)
-        messages.success(self.request, 'State license added successfully.')
-        return response
+    def get_success_url(self):
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+class CaregiverStateLicenseDeleteView(LoginRequiredMixin, DeleteView):
+    model = CaregiverStateLicense
+    template_name = 'caregivers/caregiver_state_license_confirm_delete.html'
 
     def get_success_url(self):
-        return reverse_lazy('caregiver_detail', kwargs={'pk': self.kwargs['caregiver_id']})
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+def login_view(request):
+    if request.method == 'POST':
+        form = LoginForm(data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            login(request, user)
+            messages.success(request, 'Successfully logged in!')
+            return redirect('caregiver_list')
+    else:
+        form = LoginForm()
+    return render(request, 'caregivers/auth/login.html', {'form': form})
+
+def register_view(request):
+    if request.method == 'POST':
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            messages.success(request, 'Account created successfully!')
+            return redirect('caregiver_list')
+    else:
+        form = RegisterForm()
+    return render(request, 'caregivers/auth/register.html', {'form': form})
+
+@login_required
+def logout_view(request):
+    logout(request)
+    messages.info(request, 'Successfully logged out!')
+    return redirect('login')
+
+class CertificationUpdateView(UpdateView):
+    model = Certification
+    form_class = CertificationForm
+    template_name = 'caregivers/certification_form.html'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['caregiver'] = self.object.caregiver
+        return kwargs
+
+    def get_success_url(self):
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+class CertificationDeleteView(DeleteView):
+    model = Certification
+    template_name = 'caregivers/certification_confirm_delete.html'
+
+    def get_success_url(self):
+        return reverse_lazy('caregiver_detail', kwargs={'pk': self.object.caregiver.pk})
+
+class AgencyListView(ListView):
+    model = Agency
+    template_name = 'caregivers/agency_list.html'
+    context_object_name = 'agencies'
+
+class AgencyDetailView(DetailView):
+    model = Agency
+    template_name = 'caregivers/agency_detail.html'
+    context_object_name = 'agency'
+
+class AgencyCreateView(CreateView):
+    model = Agency
+    form_class = AgencyForm
+    template_name = 'caregivers/agency_form.html'
+    success_url = reverse_lazy('agency_list')
+
+class AgencyUpdateView(UpdateView):
+    model = Agency
+    form_class = AgencyForm
+    template_name = 'caregivers/agency_form.html'
+    success_url = reverse_lazy('agency_list')
+
+class AgencyDeleteView(DeleteView):
+    model = Agency
+    template_name = 'caregivers/agency_confirm_delete.html'
+    success_url = reverse_lazy('agency_list')
+
+@login_required
+def experience_list(request):
+    caregiver = request.user.caregiver
+    experiences = caregiver.experiences.all()
+    return render(request, 'caregivers/experience_list.html', {
+        'experiences': experiences
+    })
+
+@login_required
+def add_experience(request):
+    if request.method == 'POST':
+        form = ExperienceForm(request.POST)
+        if form.is_valid():
+            experience = form.save(commit=False)
+            experience.caregiver = request.user.caregiver
+            experience.save()
+            messages.success(request, 'Experience added successfully.')
+            return redirect('experience_list')
+    else:
+        form = ExperienceForm()
+    
+    return render(request, 'caregivers/experience_form.html', {
+        'form': form,
+        'title': 'Add Experience'
+    })
+
+@login_required
+def edit_experience(request, pk):
+    experience = get_object_or_404(Experience, pk=pk, caregiver=request.user.caregiver)
+    
+    if request.method == 'POST':
+        form = ExperienceForm(request.POST, instance=experience)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Experience updated successfully.')
+            return redirect('experience_list')
+    else:
+        form = ExperienceForm(instance=experience)
+    
+    return render(request, 'caregivers/experience_form.html', {
+        'form': form,
+        'title': 'Edit Experience'
+    })
+
+@login_required
+def upload_resume(request):
+    if request.method == 'POST':
+        form = ResumeUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            resume_file = request.FILES['resume_file']
+            
+            # Extract text from resume
+            if resume_file.name.endswith('.pdf'):
+                text = extract_text_from_pdf(resume_file)
+            elif resume_file.name.endswith('.docx'):
+                text = extract_text_from_docx(resume_file)
+            else:
+                messages.error(request, 'Unsupported file format. Please upload a PDF or Word document.')
+                return redirect('upload_resume')
+            
+            # Parse resume
+            parser = ResumeParserService()
+            parsed_data = parser.parse_resume(text)
+            
+            # Create database objects
+            experiences, skills, certifications = parser.create_experience_objects(
+                request.user.caregiver,
+                parsed_data
+            )
+            
+            messages.success(request, f'Successfully extracted {len(experiences)} experiences, {len(skills)} skills, and {len(certifications)} certifications from your resume.')
+            return redirect('experience_list')
+    else:
+        form = ResumeUploadForm()
+    
+    return render(request, 'caregivers/upload_resume.html', {
+        'form': form
+    })
+
+def extract_text_from_pdf(file):
+    text = ""
+    pdf_reader = PyPDF2.PdfReader(file)
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
+def extract_text_from_docx(file):
+    text = ""
+    doc = docx.Document(file)
+    for paragraph in doc.paragraphs:
+        text += paragraph.text + "\n"
+    return text
     
